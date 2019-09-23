@@ -14,6 +14,13 @@
   (event/assert-sink! event-sink)
   (alter-var-root #'event/*event-sink* (constantly event-sink)))
 
+(defmacro with-sink
+  [event-sink & body]
+  `(let [sink# ~event-sink]
+     (event/assert-sink! sink#)
+     (binding [event/*event-sink* sink#]
+       ~@body)))
+
 (def tag:metrics "keys to a map of metrics" ::metrics)
 (def tag:metrics-timer "keys to running time in ms" ::timer)
 (def tag:metrics-meter "keys to meter value at start of event" ::meter)
@@ -74,6 +81,10 @@
   `(do
      (event/merge-tags! ~tags)
      ~@body))
+
+(defn tag!
+  [data]
+  (event/merge-tags! data))
 
 #_(m/defn ^{::morphe/aspects [(tel/event tel/timed tel/metered)]}
   ingest-stuff

@@ -1,5 +1,6 @@
 (ns aves.event
-  (:require [humilia.core :as hum]))
+  (:require [humilia.core :as hum])
+  (:import [java.util UUID]))
 
 ;; An event is just a map of data. You can send it to a sink.
 
@@ -27,18 +28,15 @@
         (instance? clojure.lang.IDeref data) (deref data)
         :else data))
 
+ ;; missing `insist`
+
+(def ^:dynamic *event-sink* nil)
+
 (defn assert-sink!
   [event-sink]
   (assert (satisfies? EventSink event-sink)
            (format "Cannot send to invalid EventSink: %s" event-sink)
-           #_{:event-sink event-sink})) ;; missing `insist`
-
-(def ^:dynamic *event-sink*)
-
-(defn set-default-sink!
-  [event-sink]
-  (assert-sink! event-sink)
-  (alter-var-root #'*event-sink* (constantly event-sink)))
+           #_{:event-sink event-sink}))
 
 ;;;;;;;;;;;;;;;;;
 ;; SENDING DATA
@@ -51,13 +49,14 @@
           finalize-data
           (send-data event-sink)))))
 
-(def ^:dynamic *current-event*)
+(def ^:dynamic *current-event* nil)
 
 ;; Only generate event ids when needed by event finalization:
 (defn promised-uuid [] (delay (str (UUID/randomUUID))))
 
 (defn new-event
   "Returns an atom containing a map of data."
+  ([] (new-event nil))
   ([data]
    (let [parent-id (when *current-event*
                      (::id @*current-event*))]
@@ -68,7 +67,7 @@
 
 (defmacro emitting-event
   [& body]
-  `(binding [*current-event* (atom (new-event))]
+  `(binding [*current-event* (new-event)]
      (try
        ~@body
        (finally
