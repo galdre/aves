@@ -44,6 +44,63 @@
         (t/is (= (::event/parent-id child-event)
                  (::event/id parent-event)))))))
 
+(t/deftest unit:multiple-sinks
+  (t/testing "Single event, two sinks"
+    (let [event-log-1 (atom [])
+          event-log-2 (atom [])]
+      (t/is
+       (= 3
+          (core/with-sink event-log-1
+            (core/with-sink event-log-2
+              (core/with-event
+                (t/is (zero? (count @event-log-1)))
+                (t/is (zero? (count @event-log-2)))
+                (+ 1 2))))))
+      (t/is (= 1 (count @event-log-1)))
+      (t/is (= 1 (count @event-log-2)))
+      (t/is (= #{::event/id}
+               (set (keys (first @event-log-1)))
+               (set (keys (first @event-log-2)))))))
+  (t/testing "Multiple events, multiple sinks"
+    (let [event-log-1 (atom [])
+          event-log-2 (atom [])]
+      (t/is
+       (= 3
+          (core/with-sink event-log-1
+            (core/with-event
+              (t/is (zero? (count @event-log-1))))
+            (core/with-sink event-log-2
+              (core/with-event
+                (t/is (= 1 (count @event-log-1)))
+                (t/is (zero? (count @event-log-2)))
+                (+ 1 2))))))
+      (t/is (= 2 (count @event-log-1)))
+      (t/is (= 1 (count @event-log-2)))
+      (t/is (= #{::event/id} (set (keys (first @event-log-1)))))))
+  (t/testing "Nested events with multiple sinks"
+    (let [outer-event-log (atom [])
+          inner-event-log (atom [])]
+      (t/is
+       (= :fifties ;; last line of with-sink
+          (core/with-sink outer-event-log
+            (core/with-event
+              (t/is (zero? (count @outer-event-log)))
+              (t/is (zero? (count @inner-event-log)))
+              (+ 1 2)
+              (core/with-sink inner-event-log
+                (core/with-event
+                  (t/is (zero? (count @outer-event-log)))
+                  (t/is (zero? (count @inner-event-log)))
+                  (+ 2 4)))
+              (t/is (= 1 (count @outer-event-log)))
+              (t/is (= 1 (count @inner-event-log))))
+            (t/is (= 2 (count @outer-event-log)))
+            (t/is (= 1 (count @inner-event-log)))
+            :fifties)))
+      (let [[child-event parent-event] @outer-event-log]
+        (t/is (= (::event/parent-id child-event)
+                 (::event/id parent-event)))))))
+
 (t/deftest unit:with-event-data
   (t/testing "A single event"
     (let [event-log (atom [])]

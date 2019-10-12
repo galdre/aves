@@ -7,16 +7,32 @@
 (def ^:dynamic *event*)
 
 (defprotocol EventSink
-  (send-data [sink data]))
+  (captures? [sink data])
+  (capture! [sink data]))
 
 (extend-protocol EventSink
   clojure.lang.Atom
-  (send-data [this data]
+  (captures? [_ _] true)
+  (capture! [this data]
     (swap! this conj data))
 
   clojure.lang.Fn
-  (send-data [this data]
+  (captures? [_ _] true)
+  (capture! [this data]
     (this data)))
+
+(defmacro defsink
+  [name-sym & {:keys [captures? capture!]}]
+  `(def ~name-sym
+     (let [captures-pred# (or ~captures?
+                              (constantly true))
+           capture-impl# ~capture!]
+       (assert (some? capture-impl#) ":capture! key not optional in defsink")
+       (reify EventSink
+         (~'captures? [this# data#]
+           (captures-pred# data#))
+         (~'capture! [this# data#]
+           (capture-impl# data#))))))
 
 ;; The vals of event data may be functions or promises
 ;; intended to be called/dereferenced at time of submission.
@@ -30,24 +46,19 @@
 
  ;; missing `insist`
 
-(def ^:dynamic *event-sink* nil)
-
-(defn assert-sink!
-  [event-sink]
-  (assert (satisfies? EventSink event-sink)
-           (format "Cannot send to invalid EventSink: %s" event-sink)
-           #_{:event-sink event-sink}))
+(def ^:dynamic *event-sinks* #{})
 
 ;;;;;;;;;;;;;;;;;
 ;; SENDING DATA
 
-(defn send!
-  ([event-data] (send! *event-sink* event-data))
+(defn emit!
+  ([event-data]
+   (doseq [sink *event-sinks*]
+     (emit! sink event-data)))
   ([event-sink event-data]
-   (when event-sink ;; TODO: optional warnings here
-     (->> event-data
-          finalize-data
-          (send-data event-sink)))))
+   (when (and (satisfies? EventSink event-sink) ;; TODO: optional warnings here
+              (captures? event-sink event-data))
+     (->> event-data finalize-data (capture! event-sink)))))
 
 (def ^:dynamic *current-event* nil)
 
@@ -71,7 +82,7 @@
      (try
        ~@body
        (finally
-         (send! @*current-event*)))))
+         (emit! @*current-event*)))))
 
 (defn- rec-merge
   [m1 m2]
@@ -83,3 +94,9 @@
   [tags]
   (when *current-event*
     (swap! *current-event* rec-merge tags)))
+
+(defn assert-sink!
+  [event-sink]
+  (assert (satisfies? EventSink event-sink)
+          (format "Cannot send to invalid EventSink: %s" event-sink)
+          #_{:event-sink event-sink}))

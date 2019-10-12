@@ -9,16 +9,16 @@
   (assert (map? tags) "Default event tags must be a map.")
   (alter-var-root #'*default-tags* (constantly tags)))
 
-(defn set-default-sink!
+(defn register-sink!
   [event-sink]
   (event/assert-sink! event-sink)
-  (alter-var-root #'event/*event-sink* (constantly event-sink)))
+  (alter-var-root #'event/*event-sinks* conj event-sink))
 
 (defmacro with-sink
   [event-sink & body]
   `(let [sink# ~event-sink]
      (event/assert-sink! sink#)
-     (binding [event/*event-sink* sink#]
+     (binding [event/*event-sinks* (conj event/*event-sinks* sink#)]
        ~@body)))
 
 (def tag:metrics "keys to a map of metrics" ::metrics)
@@ -85,23 +85,3 @@
 (defn tag!
   [data]
   (event/merge-tags! data))
-
-#_(m/defn ^{::morphe/aspects [(tel/event tel/timed tel/metered)]}
-  ingest-stuff
-  [args]
-  (go-make-an-http-call args))
-
-#_(m/defn ^{::morphe/aspects [(tel/event tel/timed)]}
-  persist-stuff
-  [data]
-  (persist-the-data data))
-
-#_(m/defn ^{::morphe/aspects [(tel/event (tel/tagged-with {:origination some-id}))]} ingest-stuff!
-  [some-id other-args]
-  (try
-    (let [data (pmap ingest-stuff other-args)]
-      (persist-stuff data))
-    (catch Throwable t
-      (let [uuid "uuid"]
-        (tel/update-event :error conj {:id uuid, :throwable t})
-        (log/errorf t "Encountered error. ID: %s." uuid)))))
