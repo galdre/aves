@@ -40,15 +40,29 @@
     (event/merge-tags! ~data)
     ~@body))
 
+(def ^:dynamic *in-event-aspect* false)
+
+(defn assert-event-aspect!
+  [name]
+  (assert (true? *in-event-aspect*)
+          (format "The %s aspect must be wrapped by the aves.core/event aspect."
+                  name)))
+
+(defn event-aspect
+  [fn-def]
+  (morphe/prefix-bodies fn-def
+    `(assert-event-aspect! ~&name)))
+
 (defn event
   [& event-mods]
   (fn [fn-def]
-    (with-event-emission ;; must be done last
-      (reduce #(%2 %)
-              fn-def
-              event-mods))))
+    (binding [*in-event-aspect* true]
+      (with-event-emission ;; must be done last
+        (reduce #(%2 %)
+                fn-def
+                event-mods)))))
 
-(defn timed
+(morphe/defn ^{::morphe/aspects [event-aspect]} timed
   [fn-def]
   (morphe/alter-bodies fn-def
     `(let [start# (. System (nanoTime))
@@ -57,26 +71,33 @@
        (event/merge-tags! {tag:metrics {tag:metrics-timer elapsed#}})
        return#)))
 
-(defn metered
+(morphe/defn ^{::morphe/aspects [event-aspect]} metered
   [fn-def]
-  (-> fn-def
-      (morphe/alter-form
-          `(let [meter# (atom 0)]
-             ~&form))
-      (morphe/alter-bodies
-          `(let [metered-count# (swap! meter# inc)]
-             (event/merge-tags! {tag:metrics {tag:metrics-meter metered-count#}})
-             (try
-               ~@&body
-               (finally (swap! meter# dec)))))))
+  (let [meter-sym (gensym 'meter)]
+    (-> fn-def
+        (morphe/alter-form
+            `(let [~meter-sym (atom 0)]
+               ~&form))
+        (morphe/alter-bodies
+            `(let [metered-count# (swap! ~meter-sym inc)]
+               (event/merge-tags! {tag:metrics {tag:metrics-meter metered-count#}})
+               (try
+                 ~@&body
+                 (finally (swap! ~meter-sym dec))))))))
 
-(defn tagged-with
+(defn tagged-with*
   [tag-map]
   (fn [fn-def]
+    (assert-event-aspect! 'tagged-with)
     (morphe/prefix-bodies fn-def
       `(event/merge-tags! ~tag-map))))
 
+(defmacro tagged-with
+  [tag-map]
+  `(tagged-with* '~tag-map))
+
 (defmacro tagging-with
+  {:style/indent 1}
   [tags & body]
   `(do
      (event/merge-tags! ~tags)

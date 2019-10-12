@@ -182,7 +182,7 @@
     (t/is (= 1 (count @event-log)))
     (t/is (= #{::event/id} (set (keys (first @event-log)))))))
 
-(m/defn ^{::m/aspects [(core/event (core/tagged-with '{:arg arg}))]} tagged-with-fn
+(m/defn ^{::m/aspects [(core/event (core/tagged-with {:arg arg}))]} tagged-with-fn
   ([arg]
    (inc arg))
   ([buzzwords arg]
@@ -201,9 +201,9 @@
   [x]
   (if (even? x)
     (core/tagging-with {:even true}
-                       (inc x))
+      (inc x))
     (core/tagging-with {:odd :ball}
-                       (dec x))))
+      (dec x))))
 
 (t/deftest unit:tagging-in-event-aspect
   (let [event-log (atom [])]
