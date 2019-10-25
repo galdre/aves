@@ -137,7 +137,7 @@
         (t/is (= :wine (:excellent parent-event)))
         (t/is (= :rum (:aged child-event)))))))
 
-(t/deftest unit:tagging-with
+(t/deftest unit:instrumenting
   (t/testing "A single event"
     (let [event-log (atom [])]
       (t/is
@@ -145,16 +145,33 @@
           (core/with-sink event-log
             (core/with-event
               (t/is (zero? (count @event-log)))
-              (core/tagging-with {:golgotha :calvary}
+              (core/instrumenting {:golgotha :calvary}
                 (+ 1 2))
-              (core/tagging-with {:dungeons :dragons}
+              (core/instrumenting {:dungeons :dragons}
                 (- 10 3))))))
       (t/is (= 1 (count @event-log)))
       (t/is (= #{::event/id :dungeons :golgotha} (set (keys (first @event-log)))))
       (t/is (= :dragons (:dungeons (first @event-log))))
       (t/is (= :calvary (:golgotha (first @event-log)))))))
 
-(t/deftest unit:tag!
+(t/deftest unit:instrumenting-with-delays
+  (t/testing "A single event"
+    (let [event-log (atom [])]
+      (t/is
+       (= 7
+          (core/with-sink event-log
+            (core/with-event
+              (t/is (zero? (count @event-log)))
+              (core/instrumenting {:golgotha (delay :calvary)}
+                (+ 1 2))
+              (core/instrumenting {:dungeons (future :dragons)}
+                (- 10 3))))))
+      (t/is (= 1 (count @event-log)))
+      (t/is (= #{::event/id :dungeons :golgotha} (set (keys (first @event-log)))))
+      (t/is (= :dragons (:dungeons (first @event-log))))
+      (t/is (= :calvary (:golgotha (first @event-log)))))))
+
+(t/deftest unit:record!
   (t/testing "A single event"
     (let [event-log (atom [])]
       (t/is
@@ -162,9 +179,9 @@
           (core/with-sink event-log
             (core/with-event
               (t/is (zero? (count @event-log)))
-              (core/tag! {:honey :pot})
+              (core/record! {:honey :pot})
               (+ 1 2)
-              (core/tag! {:cat :hat})
+              (core/record! {:cat :hat})
               (+ 10 3 5)))))
       (t/is (= 1 (count @event-log)))
       (t/is (= #{::event/id :honey :cat} (set (keys (first @event-log)))))
@@ -182,34 +199,63 @@
     (t/is (= 1 (count @event-log)))
     (t/is (= #{::event/id} (set (keys (first @event-log)))))))
 
-(m/defn ^{::m/aspects [(core/event (core/tagged-with {:arg arg}))]} tagged-with-fn
+(m/defn ^{::m/aspects [(core/event (core/instrumented {:arg arg}))]}
+  instrumented-fn
   ([arg]
    (inc arg))
   ([buzzwords arg]
    (+ buzzwords arg)))
 
-(t/deftest unit:tagged-with
+(t/deftest unit:instrumented
   (let [event-log (atom [])]
     (core/with-sink event-log
-      (t/is (= 11 (tagged-with-fn 10)))
-      (t/is (= 12 (tagged-with-fn 7 5))))
+      (t/is (= 11 (instrumented-fn 10)))
+      (t/is (= 12 (instrumented-fn 7 5))))
     (let [[event-1 event-2] @event-log]
       (t/is (= 10 (:arg event-1)))
       (t/is (= 5 (:arg event-2))))))
 
-(m/defn ^{::m/aspects [(core/event)]} event-fn-with-tagging
+(m/defn ^{::m/aspects [(core/event)]}
+  event-fn-with-instrumentation
   [x]
   (if (even? x)
-    (core/tagging-with {:even true}
+    (core/instrumenting {:even true}
       (inc x))
-    (core/tagging-with {:odd :ball}
+    (core/instrumenting {:odd :ball}
       (dec x))))
 
-(t/deftest unit:tagging-in-event-aspect
+(t/deftest unit:instrumenting-within-event-fn
   (let [event-log (atom [])]
     (core/with-sink event-log
-      (t/is (= 13 (event-fn-with-tagging 12)))
-      (t/is (= 10 (event-fn-with-tagging 11))))
+      (t/is (= 13 (event-fn-with-instrumentation 12)))
+      (t/is (= 10 (event-fn-with-instrumentation 11))))
     (let [[event-1 event-2] @event-log]
       (t/is (= #{::event/id :even} (set (keys event-1))))
       (t/is (= #{::event/id :odd} (set (keys event-2)))))))
+
+(def test-agent-sink (agent []))
+(core/defsink deffed-sink
+  :captures?
+  (fn [data] (contains? data :deffed-interest))
+  :capture!
+  (fn [data] (send test-agent-sink conj data)))
+
+(t/deftest contract:conditional-capture
+  (t/testing "Two events, only one is captured."
+    (t/is
+     (= 18
+        (core/with-sink deffed-sink
+          (core/with-event
+            (t/is (zero? (count @test-agent-sink)))
+            (core/record! {:honey :pot})
+            (+ 1 2)
+            (core/record! {:cat :hat})
+            (* 10 10))
+          (core/with-event
+            (t/is (zero? (count @test-agent-sink)))
+            (core/record! {:deffed-interest (delay :doffed)
+                           :other :stuff})
+            (- 24 6)))))
+    (t/is (= 1 (count @test-agent-sink)))
+    (t/is (= #{::event/id :deffed-interest :other} (set (keys (first @test-agent-sink)))))
+    (t/is (= :doffed (:deffed-interest (first @test-agent-sink))))))

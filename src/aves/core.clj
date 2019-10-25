@@ -1,29 +1,26 @@
 (ns aves.core
   (:require [aves.event :as event]
+            [aves.sink :as sink]
             [morphe.core :as morphe]))
 
-(def ^:dynamic *default-tags* {})
+(def ^:dynamic *default-data* {})
 
-(defn set-default-tags!
+(defn set-default-data!
   [tags]
   (assert (map? tags) "Default event tags must be a map.")
-  (alter-var-root #'*default-tags* (constantly tags)))
+  (alter-var-root #'*default-data* (constantly tags)))
 
 (defn register-sink!
   [event-sink]
-  (event/assert-sink! event-sink)
-  (alter-var-root #'event/*event-sinks* conj event-sink))
+  (sink/assert-sink! event-sink)
+  (alter-var-root #'sink/*event-sinks* conj event-sink))
 
 (defmacro with-sink
   [event-sink & body]
   `(let [sink# ~event-sink]
-     (event/assert-sink! sink#)
-     (binding [event/*event-sinks* (conj event/*event-sinks* sink#)]
+     (sink/assert-sink! sink#)
+     (binding [sink/*event-sinks* (conj sink/*event-sinks* sink#)]
        ~@body)))
-
-(def tag:metrics "keys to a map of metrics" ::metrics)
-(def tag:metrics-timer "keys to running time in ms" ::timer)
-(def tag:metrics-meter "keys to meter value at start of event" ::meter)
 
 (defn- with-event-emission
   [fn-def]
@@ -37,8 +34,11 @@
 (defmacro with-event-data
   [data & body]
   `(event/emitting-event
-    (event/merge-tags! ~data)
+    (event/merge-event-data! ~data)
     ~@body))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Morphe aspect utils ;;
 
 (def ^:dynamic *in-event-aspect* false)
 
@@ -49,11 +49,14 @@
                   name)))
 
 (defn event-aspect
+  "Apply this aspect to functions that are themselves aspects which
+  should only be applied within the `event` aspect."
   [fn-def]
   (morphe/prefix-bodies fn-def
     `(assert-event-aspect! ~&name)))
 
 (defn event
+  "Tags a function as an event."
   [& event-mods]
   (fn [fn-def]
     (binding [*in-event-aspect* true]
@@ -62,47 +65,41 @@
                 fn-def
                 event-mods)))))
 
-(morphe/defn ^{::morphe/aspects [event-aspect]} timed
-  [fn-def]
-  (morphe/alter-bodies fn-def
-    `(let [start# (. System (nanoTime))
-           return# (do ~@&body)
-           elapsed# (/ (double (- (. System (nanoTime)) start#)) 1000000.0)]
-       (event/merge-tags! {tag:metrics {tag:metrics-timer elapsed#}})
-       return#)))
-
-(morphe/defn ^{::morphe/aspects [event-aspect]} metered
-  [fn-def]
-  (let [meter-sym (gensym 'meter)]
-    (-> fn-def
-        (morphe/alter-form
-            `(let [~meter-sym (atom 0)]
-               ~&form))
-        (morphe/alter-bodies
-            `(let [metered-count# (swap! ~meter-sym inc)]
-               (event/merge-tags! {tag:metrics {tag:metrics-meter metered-count#}})
-               (try
-                 ~@&body
-                 (finally (swap! ~meter-sym dec))))))))
-
-(defn tagged-with*
+(defn instrumented-with*
   [tag-map]
   (fn [fn-def]
     (assert-event-aspect! 'tagged-with)
     (morphe/prefix-bodies fn-def
-      `(event/merge-tags! ~tag-map))))
+      `(event/merge-event-data! ~tag-map))))
 
-(defmacro tagged-with
-  [tag-map]
-  `(tagged-with* '~tag-map))
+(defmacro instrumented
+  [data]
+  `(instrumented-with* '~data))
 
-(defmacro tagging-with
+(defmacro instrumenting
   {:style/indent 1}
-  [tags & body]
+  [data & body]
   `(do
-     (event/merge-tags! ~tags)
+     (event/merge-event-data! ~data)
      ~@body))
 
-(defn tag!
+(defn record!
   [data]
-  (event/merge-tags! data))
+  (event/merge-event-data! data))
+
+(defn record-with-merge!
+  [f data]
+  (event/merge-event-data-with! f data))
+
+(defmacro defsink
+  [name-sym & {:keys [captures? capture!]}]
+  `(def ~name-sym
+     (let [captures-pred# (or ~captures?
+                              (constantly true))
+           capture-impl# ~capture!]
+       (assert (some? capture-impl#) ":capture! key not optional in defsink")
+       (reify sink/EventSink
+         (~'captures? [this# data#]
+           (captures-pred# data#))
+         (~'capture! [this# data#]
+           (capture-impl# data#))))))

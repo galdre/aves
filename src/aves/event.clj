@@ -1,42 +1,16 @@
 (ns aves.event
-  (:require [humilia.core :as hum])
+  (:require [aves.sink :as sink]
+            [humilia.core :as hum])
   (:import [java.util UUID]))
 
-;; An event is just a map of data. You can send it to a sink.
+;; An event is a plain map of data, tracked in an atom in a dynamic var.
+;; You can emit the event to a sink.
+(def ^:dynamic *current-event* nil)
 
-(def ^:dynamic *event*)
-
-(defprotocol EventSink
-  (captures? [sink data])
-  (capture! [sink data]))
-
-(extend-protocol EventSink
-  clojure.lang.Atom
-  (captures? [_ _] true)
-  (capture! [this data]
-    (swap! this conj data))
-
-  clojure.lang.Fn
-  (captures? [_ _] true)
-  (capture! [this data]
-    (this data)))
-
-(defmacro defsink
-  [name-sym & {:keys [captures? capture!]}]
-  `(def ~name-sym
-     (let [captures-pred# (or ~captures?
-                              (constantly true))
-           capture-impl# ~capture!]
-       (assert (some? capture-impl#) ":capture! key not optional in defsink")
-       (reify EventSink
-         (~'captures? [this# data#]
-           (captures-pred# data#))
-         (~'capture! [this# data#]
-           (capture-impl# data#))))))
-
-;; The vals of event data may be functions or promises
-;; intended to be called/dereferenced at time of submission.
 (defn finalize-data
+  "finalize-data prepares an event for final emission. Values that are
+  functions are resolved to the output of the function; those that are
+  derefable resolve to the dereference. All other data remains the same."
   [data]
   (cond (map? data) (into {} (hum/map-vals finalize-data) data)
         (coll? data) (into (empty data) (map finalize-data) data)
@@ -44,23 +18,12 @@
         (instance? clojure.lang.IDeref data) (deref data)
         :else data))
 
- ;; missing `insist`
-
-(def ^:dynamic *event-sinks* #{})
-
-;;;;;;;;;;;;;;;;;
-;; SENDING DATA
-
 (defn emit!
-  ([event-data]
-   (doseq [sink *event-sinks*]
-     (emit! sink event-data)))
-  ([event-sink event-data]
-   (when (and (satisfies? EventSink event-sink) ;; TODO: optional warnings here
-              (captures? event-sink event-data))
-     (->> event-data finalize-data (capture! event-sink)))))
-
-(def ^:dynamic *current-event* nil)
+  ([event-data] (emit! event-data sink/*event-sinks*))
+  ([event-data sinks]
+   (let [finalized-data (delay (finalize-data event-data))]
+     (doseq [sink sinks :when (sink/captures? sink event-data)]
+       (sink/capture! sink @finalized-data)))))
 
 ;; Only generate event ids when needed by event finalization:
 (defn promised-uuid [] (delay (str (UUID/randomUUID))))
@@ -90,13 +53,21 @@
     m2
     (merge-with rec-merge m1 m2)))
 
-(defn merge-tags!
-  [tags]
-  (when *current-event*
-    (swap! *current-event* rec-merge tags)))
+(defn- rec-merge-with
+  [f m1 m2]
+  (if-not (and (map? m1) (map? m2))
+    (f m1 m2)
+    (merge-with (partial rec-merge-with f) m1 m2)))
 
-(defn assert-sink!
-  [event-sink]
-  (assert (satisfies? EventSink event-sink)
-          (format "Cannot send to invalid EventSink: %s" event-sink)
-          #_{:event-sink event-sink}))
+(defn merge-event-data!
+  "Expects a map. Recursively merges into existing event data, overwriting."
+  [data]
+  (when *current-event*
+    (swap! *current-event* rec-merge data)))
+
+(defn merge-event-data-with!
+  [f data]
+  "Expects a map. Recursively merges into existing event data. On
+  conflict, uses (f prev-data new-data) to determine new value."
+  (when *current-event*
+    (swap! *current-event* (partial rec-merge-with f) data)))
