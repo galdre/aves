@@ -2,12 +2,10 @@
   (:require [aves.event :as event]
             [aves.processor :as processor]))
 
-(def ^:dynamic *default-data* {})
-
 (defn set-default-data!
-  [tags]
-  (assert (map? tags) "Default event tags must be a map.")
-  (alter-var-root #'*default-data* (constantly tags)))
+  [data]
+  (assert (map? data) "Default event tags must be a map.")
+  (alter-var-root #'event/*default-data* (constantly data)))
 
 (defmacro defprocessor
   [name-sym & {:keys [processes? process!]}]
@@ -92,3 +90,12 @@
 
 (defn event-id [event-map] (event/id-key event-map))
 (defn parent-event-id [event-map] (event/parent-id-key event-map))
+
+(defn repeater*
+  [f]
+  (reify clojure.lang.IDeref
+    (deref [_] (f))))
+
+(defmacro repeater
+  [& body]
+  `(repeater* (fn [] ~@body)))

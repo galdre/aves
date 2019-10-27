@@ -155,6 +155,48 @@
       (t/is (= :dragons (:dungeons (first @event-log))))
       (t/is (= :calvary (:golgotha (first @event-log)))))))
 
+(t/deftest unit:with-data-using-repeaters
+  (t/testing "Simple test"
+    (let [event-log (atom [])]
+      (t/is
+       (= 30
+          (core/with-processor event-log
+            (core/with-event
+              (t/is (zero? (count @event-log)))
+              (core/merging-data {:clojure (core/repeater* (constantly :awesome))
+                                  :fruit (constantly :banana)}
+                (/ 1 2))
+              (core/merging-data {:java (core/repeater "tewonmasoe")
+                                  :meat (fn [] "antelope")}
+                (* 10 3))))))
+      (t/is (= 1 (count @event-log)))
+      (t/is (= #{::event/id :clojure :java :fruit :meat} (set (keys (first @event-log)))))
+      (t/is (= :awesome (:clojure (first @event-log))))
+      (t/is (= "tewonmasoe" (:java (first @event-log))))
+      (t/is (= :banana ((:fruit (first @event-log)))))
+      (t/is (= "antelope" ((:meat (first @event-log))))))))
+
+(t/deftest unit:repeater+set-default-data!
+  (try
+    (let [counter (atom 0)
+          repeater (core/repeater (swap! counter inc) :some-value)
+          event-log (atom [])]
+      (core/set-default-data! {:a-universal-key repeater})
+      (t/is
+       (= 1
+          (core/with-processor event-log
+            (core/with-event
+              (t/is (zero? (count @event-log)))
+              -1
+              (core/with-event
+                (t/is (zero? (count @event-log)))
+                1)))))
+      (t/is (= 2 (count @event-log)))
+      (t/is (= 2 @counter))
+      (t/is (every? (comp #{:some-value} :a-universal-key) @event-log)))
+    (finally
+      (core/set-default-data! {}))))
+
 (t/deftest unit:with-data-with-derefables
   (t/testing "A single event"
     (let [event-log (atom [])]

@@ -7,6 +7,9 @@
 ;; You can emit the event to a processor.
 (def ^:dynamic *current-event* nil)
 
+;; It may be useful to register certain data that all new events will contain.
+(def ^:dynamic *default-data* {})
+
 (defn finalize-data
   "finalize-data prepares an event for final emission. Values that are
   derefable resolve to the dereference. All other data remains the same."
@@ -38,6 +41,7 @@
      (-> {id-key (promised-uuid)}
          (cond-> parent-id (assoc parent-id-key parent-id)
                  data (merge data))
+         (merge *default-data*)
          (atom)))))
 
 (defmacro emitting-event
