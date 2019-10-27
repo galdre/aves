@@ -20,7 +20,7 @@
 (defn- with-event-emission
   [fn-def]
   (m/alter-bodies fn-def
-    `(event/emitting-event ~@&body)))
+    `(core/with-event ~@&body)))
 
 (defn event
   "Tags a function as an event."

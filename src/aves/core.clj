@@ -41,6 +41,7 @@
   `(event/emitting-event ~@body))
 
 (defmacro with-event-data
+  {:style/indent 1}
   [data & body]
   `(event/emitting-event
     (merge-data! ~data)
