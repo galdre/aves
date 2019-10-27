@@ -3,9 +3,9 @@
 (def ^:dynamic *event-processors* #{})
 
 (defprotocol EventProcessor
-  (processes? [processor non-final-data] "Takes the non-finalized event map;
-  returns true/false. Should not evaluate any event-thunks, or
-  dereference any delays, contained within the map.")
+  (processes? [processor non-final-data] "Takes the non-finalized
+  event map; returns true/false. Should not dereference any delays
+  contained within the map.")
   (process! [processor data] "Expects the finalized event data. Does
   whatever side effecty things it so desires. Should not be blocking."))
 

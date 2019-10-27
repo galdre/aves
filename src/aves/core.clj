@@ -89,13 +89,5 @@
 ;;;;;;;;;;;;;;;;;;;
 ;; UTILS & OTHER ;;
 
-(defn thunk* [f] (assert (fn? f)) (event/thunk f))
-
-(defmacro thunk
-  [& body]
-  `(thunk* (fn [] ~@body)))
-
-(defn thunk? [x] (event/event-thunk? x))
-
 (defn event-id [event-map] (event/id-key event-map))
 (defn parent-event-id [event-map] (event/parent-id-key event-map))
