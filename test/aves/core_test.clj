@@ -1,5 +1,6 @@
 (ns aves.core-test
-  (:require [aves.core :as core]
+  (:require [aves.aspects :as asp]
+            [aves.core :as core]
             [aves.event :as event]
             [clojure.test :as t]
             [morphe.core :as m]))
@@ -137,7 +138,7 @@
         (t/is (= :wine (:excellent parent-event)))
         (t/is (= :rum (:aged child-event)))))))
 
-(t/deftest unit:with-data
+(t/deftest unit:merging-data
   (t/testing "A single event"
     (let [event-log (atom [])]
       (t/is
@@ -145,9 +146,9 @@
           (core/with-sink event-log
             (core/with-event
               (t/is (zero? (count @event-log)))
-              (core/with-data {:golgotha :calvary}
+              (core/merging-data {:golgotha :calvary}
                 (+ 1 2))
-              (core/with-data {:dungeons :dragons}
+              (core/merging-data {:dungeons :dragons}
                 (- 10 3))))))
       (t/is (= 1 (count @event-log)))
       (t/is (= #{::event/id :dungeons :golgotha} (set (keys (first @event-log)))))
@@ -162,16 +163,16 @@
           (core/with-sink event-log
             (core/with-event
               (t/is (zero? (count @event-log)))
-              (core/with-data {:golgotha (delay :calvary)}
+              (core/merging-data {:golgotha (delay :calvary)}
                 (+ 1 2))
-              (core/with-data {:dungeons (future :dragons)}
+              (core/merging-data {:dungeons (future :dragons)}
                 (- 10 3))))))
       (t/is (= 1 (count @event-log)))
       (t/is (= #{::event/id :dungeons :golgotha} (set (keys (first @event-log)))))
       (t/is (= :dragons (:dungeons (first @event-log))))
       (t/is (= :calvary (:golgotha (first @event-log)))))))
 
-(t/deftest unit:with-data-with-fns
+(t/deftest unit:with-data-using-fns
   (t/testing "A single event"
     (let [event-log (atom [])]
       (t/is
@@ -179,9 +180,9 @@
           (core/with-sink event-log
             (core/with-event
               (t/is (zero? (count @event-log)))
-              (core/with-data {:clojure (constantly :awesome)}
+              (core/merging-data {:clojure (constantly :awesome)}
                 (/ 1 2))
-              (core/with-data {:java (fn [] "tewonmasoe")}
+              (core/merging-data {:java (fn [] "tewonmasoe")}
                 (* 10 3))))))
       (t/is (= 1 (count @event-log)))
       (t/is (= #{::event/id :clojure :java} (set (keys (first @event-log)))))
@@ -218,7 +219,7 @@
       (t/is (= #{::event/id :integers} (set (keys (first @event-log)))))
       (t/is (= [10 159233] (:integers (first @event-log)))))))
 
-(m/defn ^{::m/aspects [(core/event)]} event-fn
+(m/defn ^{::m/aspects [(asp/event)]} event-fn
   [x]
   (inc x))
 
@@ -229,14 +230,12 @@
     (t/is (= 1 (count @event-log)))
     (t/is (= #{::event/id} (set (keys (first @event-log)))))))
 
-(m/defn ^{::m/aspects [(core/event (core/instrumented {:arg arg}))]}
+(m/defn ^{::m/aspects [(asp/event (asp/tagged {:arg arg}))]}
   instrumented-fn
-  ([arg]
-   (inc arg))
-  ([buzzwords arg]
-   (+ buzzwords arg)))
+  ([arg] (inc arg))
+  ([buzzwords arg] (+ buzzwords arg)))
 
-(t/deftest unit:instrumented
+(t/deftest unit:tagged
   (let [event-log (atom [])]
     (core/with-sink event-log
       (t/is (= 11 (instrumented-fn 10)))
@@ -245,13 +244,13 @@
       (t/is (= 10 (:arg event-1)))
       (t/is (= 5 (:arg event-2))))))
 
-(m/defn ^{::m/aspects [(core/event)]}
+(m/defn ^{::m/aspects [(asp/event)]}
   event-fn-with-instrumentation
   [x]
   (if (even? x)
-    (core/with-data {:even true}
+    (core/merging-data {:even true}
       (inc x))
-    (core/with-data {:odd :ball}
+    (core/merging-data {:odd :ball}
       (dec x))))
 
 (t/deftest unit:with-data-within-event-fn
