@@ -7,14 +7,17 @@
 ;; You can emit the event to a processor.
 (def ^:dynamic *current-event* nil)
 
+(defn thunk [f] (with-meta f {::thunk true}))
+(defn event-thunk? [x] (and (fn? x) (::thunk (meta x))))
+
 (defn finalize-data
   "finalize-data prepares an event for final emission. Values that are
-  functions are resolved to the output of the function; those that are
+  event-thunks are resolved to the output of the function; those that are
   derefable resolve to the dereference. All other data remains the same."
   [data]
   (cond (map? data) (into {} (hum/map-vals finalize-data) data)
         (coll? data) (into (empty data) (map finalize-data) data)
-        (fn? data) (data)
+        (event-thunk? data) (data)
         (instance? clojure.lang.IDeref data) (deref data)
         :else data))
 

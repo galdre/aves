@@ -36,6 +36,14 @@
 ;;;;;;;;;;;
 ;; UTILS ;;
 
+(defn thunk* [f] (assert (fn? f)) (event/thunk f))
+
+(defmacro thunk
+  [& body]
+  `(thunk* (fn [] ~@body)))
+
+(defn thunk? [x] (event/event-thunk? x))
+
 (defmacro with-event
   [& body]
   `(event/emitting-event ~@body))

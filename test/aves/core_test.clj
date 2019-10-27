@@ -180,14 +180,18 @@
           (core/with-processor event-log
             (core/with-event
               (t/is (zero? (count @event-log)))
-              (core/merging-data {:clojure (constantly :awesome)}
+              (core/merging-data {:clojure (core/thunk* (constantly :awesome))
+                                  :fruit (constantly :banana)}
                 (/ 1 2))
-              (core/merging-data {:java (fn [] "tewonmasoe")}
+              (core/merging-data {:java (core/thunk "tewonmasoe")
+                                  :meat (fn [] "antelope")}
                 (* 10 3))))))
       (t/is (= 1 (count @event-log)))
-      (t/is (= #{::event/id :clojure :java} (set (keys (first @event-log)))))
+      (t/is (= #{::event/id :clojure :java :fruit :meat} (set (keys (first @event-log)))))
       (t/is (= :awesome (:clojure (first @event-log))))
-      (t/is (= "tewonmasoe" (:java (first @event-log)))))))
+      (t/is (= "tewonmasoe" (:java (first @event-log))))
+      (t/is (= :banana ((:fruit (first @event-log)))))
+      (t/is (= "antelope" ((:meat (first @event-log))))))))
 
 (t/deftest unit:merge-data!
   (t/testing "A single event"
