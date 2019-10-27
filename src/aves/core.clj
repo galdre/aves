@@ -87,3 +87,6 @@
   `(do
      (merge-data-with! ~f ~data)
      ~@body))
+
+(defn event-id [event-map] (event/id-key event-map))
+(defn parent-event-id [event-map] (event/parent-id-key event-map))

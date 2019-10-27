@@ -28,14 +28,17 @@
 ;; Only generate event ids when needed by event finalization:
 (defn promised-uuid [] (delay (str (UUID/randomUUID))))
 
+(def id-key ::id)
+(def parent-id-key ::parent-id)
+
 (defn new-event
   "Returns an atom containing a map of data."
   ([] (new-event nil))
   ([data]
    (let [parent-id (when *current-event*
-                     (::id @*current-event*))]
-     (-> {::id (promised-uuid)}
-         (cond-> parent-id (assoc ::parent-id parent-id)
+                     (id-key @*current-event*))]
+     (-> {id-key (promised-uuid)}
+         (cond-> parent-id (assoc parent-id-key parent-id)
                  data (merge data))
          (atom)))))
 
