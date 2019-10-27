@@ -1,10 +1,10 @@
 (ns aves.event
-  (:require [aves.sink :as sink]
+  (:require [aves.processor :as processor]
             [humilia.core :as hum])
   (:import [java.util UUID]))
 
 ;; An event is a plain map of data, tracked in an atom in a dynamic var.
-;; You can emit the event to a sink.
+;; You can emit the event to a processor.
 (def ^:dynamic *current-event* nil)
 
 (defn finalize-data
@@ -19,11 +19,11 @@
         :else data))
 
 (defn emit!
-  ([event-data] (emit! event-data sink/*event-sinks*))
-  ([event-data sinks]
+  ([event-data] (emit! event-data processor/*event-processors*))
+  ([event-data processors]
    (let [finalized-data (delay (finalize-data event-data))]
-     (doseq [sink sinks :when (sink/captures? sink event-data)]
-       (sink/capture! sink @finalized-data)))))
+     (doseq [processor processors :when (processor/processes? processor event-data)]
+       (processor/process! processor @finalized-data)))))
 
 ;; Only generate event ids when needed by event finalization:
 (defn promised-uuid [] (delay (str (UUID/randomUUID))))

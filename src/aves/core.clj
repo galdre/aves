@@ -1,6 +1,6 @@
 (ns aves.core
   (:require [aves.event :as event]
-            [aves.sink :as sink]))
+            [aves.processor :as processor]))
 
 (def ^:dynamic *default-data* {})
 
@@ -9,29 +9,28 @@
   (assert (map? tags) "Default event tags must be a map.")
   (alter-var-root #'*default-data* (constantly tags)))
 
-(defmacro defsink
-  [name-sym & {:keys [captures? capture!]}]
+(defmacro defprocessor
+  [name-sym & {:keys [processes? process!]}]
   `(def ~name-sym
-     (let [captures-pred# (or ~captures?
-                              (constantly true))
-           capture-impl# ~capture!]
-       (assert (some? capture-impl#) ":capture! key not optional in defsink")
-       (reify sink/EventSink
-         (~'captures? [this# data#]
-           (captures-pred# data#))
-         (~'capture! [this# data#]
-           (capture-impl# data#))))))
+     (let [processes?# (or ~processes? (constantly true))
+           process!# ~process!]
+       (assert (some? process!#) ":process! key not optional in defprocessor")
+       (reify processor/EventProcessor
+         (~'processes? [this# data#]
+           (processes?# data#))
+         (~'process! [this# data#]
+           (process!# data#))))))
 
-(defn register-sink!
-  [event-sink]
-  (sink/assert-sink! event-sink)
-  (alter-var-root #'sink/*event-sinks* conj event-sink))
+(defn register-processor!
+  [event-processor]
+  (processor/assert-processor! event-processor)
+  (alter-var-root #'processor/*event-processors* conj event-processor))
 
-(defmacro with-sink
-  [event-sink & body]
-  `(let [sink# ~event-sink]
-     (sink/assert-sink! sink#)
-     (binding [sink/*event-sinks* (conj sink/*event-sinks* sink#)]
+(defmacro with-processor
+  [event-processor & body]
+  `(let [processor# ~event-processor]
+     (processor/assert-processor! processor#)
+     (binding [processor/*event-processors* (conj processor/*event-processors* processor#)]
        ~@body)))
 
 ;;;;;;;;;;;
