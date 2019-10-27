@@ -33,16 +33,8 @@
      (binding [processor/*event-processors* (conj processor/*event-processors* processor#)]
        ~@body)))
 
-;;;;;;;;;;;
-;; UTILS ;;
-
-(defn thunk* [f] (assert (fn? f)) (event/thunk f))
-
-(defmacro thunk
-  [& body]
-  `(thunk* (fn [] ~@body)))
-
-(defn thunk? [x] (event/event-thunk? x))
+;;;;;;;;;;;;;;;;;;;;;;;;
+;; Event Manipulation ;;
 
 (defmacro with-event
   [& body]
@@ -67,7 +59,7 @@
   (when event/*current-event*
     (swap! event/*current-event* rec-merge data)))
 
-(defmacro merging-data ;; with-data
+(defmacro merging-data
   {:style/indent 1}
   [data & body]
   `(do
@@ -93,6 +85,17 @@
   `(do
      (merge-data-with! ~f ~data)
      ~@body))
+
+;;;;;;;;;;;;;;;;;;;
+;; UTILS & OTHER ;;
+
+(defn thunk* [f] (assert (fn? f)) (event/thunk f))
+
+(defmacro thunk
+  [& body]
+  `(thunk* (fn [] ~@body)))
+
+(defn thunk? [x] (event/event-thunk? x))
 
 (defn event-id [event-map] (event/id-key event-map))
 (defn parent-event-id [event-map] (event/parent-id-key event-map))
