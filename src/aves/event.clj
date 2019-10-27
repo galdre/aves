@@ -46,28 +46,3 @@
        ~@body
        (finally
          (emit! @*current-event*)))))
-
-(defn- rec-merge
-  [m1 m2]
-  (if-not (and (map? m1) (map? m2))
-    m2
-    (merge-with rec-merge m1 m2)))
-
-(defn- rec-merge-with
-  [f m1 m2]
-  (if-not (and (map? m1) (map? m2))
-    (f m1 m2)
-    (merge-with (partial rec-merge-with f) m1 m2)))
-
-(defn merge-event-data!
-  "Expects a map. Recursively merges into existing event data, overwriting."
-  [data]
-  (when *current-event*
-    (swap! *current-event* rec-merge data)))
-
-(defn merge-event-data-with!
-  [f data]
-  "Expects a map. Recursively merges into existing event data. On
-  conflict, uses (f prev-data new-data) to determine new value."
-  (when *current-event*
-    (swap! *current-event* (partial rec-merge-with f) data)))
