@@ -1,7 +1,7 @@
 (ns aves.core-test
   (:require [aves.aspects :as asp]
             [aves.core :as core]
-            [aves.event :as event]
+            [aves.event :as aves-event]
             [clojure.test :as t]
             [morphe.core :as m]))
 
@@ -15,7 +15,7 @@
               (t/is (zero? (count @event-log)))
               (+ 1 2)))))
       (t/is (= 1 (count @event-log)))
-      (t/is (= #{::event/id} (set (keys (first @event-log)))))))
+      (t/is (= #{::aves-event/id} (set (keys (first @event-log)))))))
   (t/testing "A single event with function processor"
     (let [atom-log (atom [])
           event-log (fn [data] (swap! atom-log conj data))]
@@ -26,7 +26,7 @@
               (t/is (zero? (count @atom-log)))
               (+ 1 2)))))
       (t/is (= 1 (count @atom-log)))
-      (t/is (= #{::event/id} (set (keys (first @atom-log)))))))
+      (t/is (= #{::aves-event/id} (set (keys (first @atom-log)))))))
   (t/testing "A nested event"
     (let [event-log (atom [])]
       (t/is
@@ -42,8 +42,8 @@
             (t/is (= 2 (count @event-log)))
             :fifties)))
       (let [[child-event parent-event] @event-log]
-        (t/is (= (::event/parent-id child-event)
-                 (::event/id parent-event)))))))
+        (t/is (= (::aves-event/parent-id child-event)
+                 (::aves-event/id parent-event)))))))
 
 (t/deftest unit:with-processor
   (t/testing "Single event, two processors"
@@ -59,7 +59,7 @@
                 (+ 1 2))))))
       (t/is (= 1 (count @event-log-1)))
       (t/is (= 1 (count @event-log-2)))
-      (t/is (= #{::event/id}
+      (t/is (= #{::aves-event/id}
                (set (keys (first @event-log-1)))
                (set (keys (first @event-log-2)))))))
   (t/testing "Multiple events, multiple processors"
@@ -77,7 +77,7 @@
                 (+ 1 2))))))
       (t/is (= 2 (count @event-log-1)))
       (t/is (= 1 (count @event-log-2)))
-      (t/is (= #{::event/id} (set (keys (first @event-log-1)))))))
+      (t/is (= #{::aves-event/id} (set (keys (first @event-log-1)))))))
   (t/testing "Nested events with multiple processors"
     (let [outer-event-log (atom [])
           inner-event-log (atom [])]
@@ -99,8 +99,8 @@
             (t/is (= 1 (count @inner-event-log)))
             :fifties)))
       (let [[child-event parent-event] @outer-event-log]
-        (t/is (= (::event/parent-id child-event)
-                 (::event/id parent-event)))))))
+        (t/is (= (::aves-event/parent-id child-event)
+                 (::aves-event/id parent-event)))))))
 
 (t/deftest unit:with-event-data
   (t/testing "A single event"
@@ -113,7 +113,7 @@
               (t/is (zero? (count @event-log)))
               (+ 1 2)))))
       (t/is (= 1 (count @event-log)))
-      (t/is (= #{::event/id :hi} (set (keys (first @event-log)))))
+      (t/is (= #{::aves-event/id :hi} (set (keys (first @event-log)))))
       (t/is (= :there (:hi (first @event-log))))))
   (t/testing "A nested event"
     (let [event-log (atom [])
@@ -133,8 +133,8 @@
             (t/is (= 2 (count @event-log)))
             :darth-vader)))
       (let [[child-event parent-event] @event-log]
-        (t/is (= (::event/parent-id child-event)
-                 (::event/id parent-event)))
+        (t/is (= (::aves-event/parent-id child-event)
+                 (::aves-event/id parent-event)))
         (t/is (= :wine (:excellent parent-event)))
         (t/is (= :rum (:aged child-event)))))))
 
@@ -151,7 +151,7 @@
               (core/merging-data {:dungeons :dragons}
                 (- 10 3))))))
       (t/is (= 1 (count @event-log)))
-      (t/is (= #{::event/id :dungeons :golgotha} (set (keys (first @event-log)))))
+      (t/is (= #{::aves-event/id :dungeons :golgotha} (set (keys (first @event-log)))))
       (t/is (= :dragons (:dungeons (first @event-log))))
       (t/is (= :calvary (:golgotha (first @event-log)))))))
 
@@ -170,7 +170,7 @@
                                   :meat (fn [] "antelope")}
                 (* 10 3))))))
       (t/is (= 1 (count @event-log)))
-      (t/is (= #{::event/id :clojure :java :fruit :meat} (set (keys (first @event-log)))))
+      (t/is (= #{::aves-event/id :clojure :java :fruit :meat} (set (keys (first @event-log)))))
       (t/is (= :awesome (:clojure (first @event-log))))
       (t/is (= "tewonmasoe" (:java (first @event-log))))
       (t/is (= :banana ((:fruit (first @event-log)))))
@@ -210,7 +210,7 @@
               (core/merging-data {:dungeons (future :dragons)}
                 (- 10 3))))))
       (t/is (= 1 (count @event-log)))
-      (t/is (= #{::event/id :dungeons :golgotha} (set (keys (first @event-log)))))
+      (t/is (= #{::aves-event/id :dungeons :golgotha} (set (keys (first @event-log)))))
       (t/is (= :dragons (:dungeons (first @event-log))))
       (t/is (= :calvary (:golgotha (first @event-log)))))))
 
@@ -227,7 +227,7 @@
               (core/merge-data! {:cat :hat})
               (+ 10 3 5)))))
       (t/is (= 1 (count @event-log)))
-      (t/is (= #{::event/id :honey :cat} (set (keys (first @event-log)))))
+      (t/is (= #{::aves-event/id :honey :cat} (set (keys (first @event-log)))))
       (t/is (= :pot (:honey (first @event-log))))
       (t/is (= :hat (:cat (first @event-log)))))))
 
@@ -241,7 +241,7 @@
           (core/merge-data-with! conj {:integers 10})
           (core/merge-data-with! conj {:integers 159233})))
       (t/is (= 1 (count @event-log)))
-      (t/is (= #{::event/id :integers} (set (keys (first @event-log)))))
+      (t/is (= #{::aves-event/id :integers} (set (keys (first @event-log)))))
       (t/is (= [10 159233] (:integers (first @event-log)))))))
 
 (m/defn ^{::m/aspects [(asp/event)]} event-fn
@@ -253,7 +253,7 @@
     (core/with-processor event-log
       (t/is (= 5 (event-fn 4))))
     (t/is (= 1 (count @event-log)))
-    (t/is (= #{::event/id} (set (keys (first @event-log)))))))
+    (t/is (= #{::aves-event/id} (set (keys (first @event-log)))))))
 
 (m/defn ^{::m/aspects [(asp/event (asp/tagged {:arg arg}))]}
   instrumented-fn
@@ -284,8 +284,8 @@
       (t/is (= 13 (event-fn-with-instrumentation 12)))
       (t/is (= 10 (event-fn-with-instrumentation 11))))
     (let [[event-1 event-2] @event-log]
-      (t/is (= #{::event/id :even} (set (keys event-1))))
-      (t/is (= #{::event/id :odd} (set (keys event-2)))))))
+      (t/is (= #{::aves-event/id :even} (set (keys event-1))))
+      (t/is (= #{::aves-event/id :odd} (set (keys event-2)))))))
 
 (def agent-kitty-processor (agent []))
 (def ref-puppy-processor (ref []))
@@ -328,8 +328,8 @@
         (t/is (= 2 (count @omni-log)))
         (t/is (= 1 (count @agent-kitty-processor) (count @ref-puppy-processor))))
       (t/testing "The other processors captured different events"
-        (t/is (= #{::event/id :tiger} (set (keys (first @agent-kitty-processor)))))
-        (t/is (= #{::event/id :mastiff} (set (keys (first @ref-puppy-processor))))))
+        (t/is (= #{::aves-event/id :tiger} (set (keys (first @agent-kitty-processor)))))
+        (t/is (= #{::aves-event/id :mastiff} (set (keys (first @ref-puppy-processor))))))
       (t/testing "Data integrity compmlete."
         (t/is (= :singapura (:tiger (first @agent-kitty-processor))))
         (t/is (= :chihuahua (:mastiff (first @ref-puppy-processor))))))))
