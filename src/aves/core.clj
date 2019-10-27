@@ -1,7 +1,6 @@
 (ns aves.core
   (:require [aves.event :as event]
-            [aves.sink :as sink]
-            [morphe.core :as morphe]))
+            [aves.sink :as sink]))
 
 (def ^:dynamic *default-data* {})
 
